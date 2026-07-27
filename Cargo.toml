@@ -1,0 +1,20 @@
+[package]
+name = "justupload"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = { version = "0.7", features = ["multipart"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "signal", "time", "io-util"] }
+tokio-util = { version = "0.7", features = ["io"] }
+tower-http = { version = "0.5", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rand = "0.8"
+futures = "0.3"
+mime_guess = "2"
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1

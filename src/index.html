@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>justupload</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; max-width: 46rem;
+         margin: 3rem auto; padding: 0 1rem; line-height: 1.5; }
+  h1 { font-size: 1.4rem; margin-bottom: 0; }
+  p.sub { margin-top: .2rem; opacity: .7; }
+  pre { background: rgba(127,127,127,.15); padding: .7rem; overflow-x: auto; border-radius: 6px; }
+  #drop { border: 2px dashed rgba(127,127,127,.5); border-radius: 8px; padding: 2rem;
+          text-align: center; cursor: pointer; }
+  #drop.over { border-color: #3b82f6; }
+  #out a { word-break: break-all; }
+  ul { padding-left: 1.2rem; }
+</style>
+</head>
+<body>
+<h1>justupload</h1>
+<p class="sub">temporary file sharing. one download, then it is gone.</p>
+
+<div id="drop">drop a file here, or click to pick one</div>
+<input type="file" id="picker" hidden>
+<p id="out"></p>
+
+<h2>curl</h2>
+<pre>curl -T file.txt {{BASE}}/
+curl -F 'file=@file.txt' {{BASE}}/</pre>
+
+<h2>wget</h2>
+<pre>wget --method=PUT --body-file=file.txt -qO- {{BASE}}/</pre>
+
+<h2>rules</h2>
+<ul>
+  <li>max file size: 10 MB</li>
+  <li>deleted after the first download</li>
+  <li>deleted after 1 hour</li>
+  <li>max 30 MB of uploads per hour per IP</li>
+  <li>no backups, no guarantees</li>
+</ul>
+
+<script>
+const drop = document.getElementById('drop');
+const picker = document.getElementById('picker');
+const out = document.getElementById('out');
+
+function send(file) {
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { out.textContent = 'too large: max 10 MB'; return; }
+  out.textContent = 'uploading ' + file.name + '...';
+  fetch('/', { method: 'PUT', body: file, headers: { 'X-Filename': file.name } })
+    .then(r => r.text().then(t => ({ ok: r.ok, t: t.trim() })))
+    .then(({ ok, t }) => {
+      if (!ok) { out.textContent = t; return; }
+      out.innerHTML = '';
+      const a = document.createElement('a');
+      a.href = t; a.textContent = t;
+      out.appendChild(a);
+    })
+    .catch(e => { out.textContent = 'upload failed: ' + e; });
+}
+
+drop.addEventListener('click', () => picker.click());
+picker.addEventListener('change', () => send(picker.files[0]));
+drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+drop.addEventListener('drop', e => {
+  e.preventDefault(); drop.classList.remove('over');
+  send(e.dataTransfer.files[0]);
+});
+</script>
+</body>
+</html>
