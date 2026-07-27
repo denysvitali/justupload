@@ -1,7 +1,11 @@
 # justupload
 
+[![CI](https://github.com/denysvitali/justupload/actions/workflows/ci.yml/badge.svg)](https://github.com/denysvitali/justupload/actions/workflows/ci.yml)
+
 Temporary file sharing for the terminal. Upload a file, get a URL, the file is
 deleted after the first download (or after one hour, whichever comes first).
+
+Live at <https://justupload.fly.dev>.
 
 ```console
 $ curl -T notes.txt https://justupload.fly.dev/
@@ -32,8 +36,19 @@ curl -F 'file=@file.txt' https://justupload.fly.dev/
 wget --method=PUT --body-file=file.txt -qO- https://justupload.fly.dev/
 ```
 
-`GET /` returns plain-text help for curl/wget and an HTML page with a drop zone
-for browsers. `GET /health` reports the number of stored files.
+### Routes
+
+| route | what it does |
+| --- | --- |
+| `GET /` | plain-text help for curl/wget, HTML drop zone for browsers |
+| `PUT`/`POST /` | upload; name from `X-Filename`, else `file` |
+| `PUT`/`POST /:name` | upload named `:name` (this is what `curl -T` sends) |
+| `GET /:id` | download once, then the file is gone |
+| `GET /:id/:name` | same, with the filename in the URL |
+| `GET /health` | `ok` plus the number and size of stored files |
+
+Uploads answer `201` with the URL as plain text, `413` when the file is over the
+limit, and `429` when the hourly IP quota is used up.
 
 ## Running locally
 
@@ -83,6 +98,8 @@ fly scale count 1                                          # never more than one
 One `shared-cpu-1x` machine with 256 MB RAM and a 5 GB volume mounted at
 `/data`. State is in memory, so a second machine would hand out URLs the other
 machine cannot serve.
+
+Pushes to `main` are deployed by Fly's GitHub integration.
 
 ## CI
 
