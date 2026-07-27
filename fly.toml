@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for justupload on 2026-07-27T20:55:30Z
+# fly.toml app configuration file for justupload
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -11,8 +11,15 @@ primary_region = 'ams'
 
 [env]
   PORT = '8080'
-  RUST_LOG = 'info'
-  UPLOAD_DIR = '/tmp/justupload'
+  UPLOAD_DIR = '/data/uploads'
+  RUST_LOG = 'info,tower_http=info'
+
+# Files are indexed in memory, so this app must never run on more than one
+# machine. Keep the count at 1 (`fly scale count 1`).
+[mounts]
+  source = 'justupload_data'
+  destination = '/data'
+  initial_size = '5gb'
 
 [http_service]
   internal_port = 8080
@@ -36,4 +43,4 @@ primary_region = 'ams'
 
 [[vm]]
   size = 'shared-cpu-1x'
-  memory = '512mb'
+  memory = '256mb'

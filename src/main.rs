@@ -60,8 +60,8 @@ async fn main() {
     let app = Router::new()
         .route("/", any(root))
         .route("/health", get(health))
-        .route("/:id", get(download))
-        .route("/:id/:name", get(download_named))
+        .route("/:id", any(one_segment))
+        .route("/:id/:name", any(two_segments))
         .layer(DefaultBodyLimit::max(MAX_FILE_SIZE + 64 * 1024))
         .layer(tower_http::trace::TraceLayer::new_for_http())
         .with_state(st);
@@ -96,7 +96,36 @@ async fn root(
 ) -> Response {
     match *req.method() {
         Method::GET | Method::HEAD => index(&st, req.headers()),
-        Method::POST | Method::PUT => upload(st, peer, req).await,
+        Method::POST | Method::PUT => upload(st, peer, req, None).await,
+        _ => (StatusCode::METHOD_NOT_ALLOWED, "method not allowed\n").into_response(),
+    }
+}
+
+/// `GET /:id` downloads. `PUT /:name` uploads — `curl -T file URL/` appends the
+/// filename to the path, so an upload legitimately arrives at a one-segment path.
+async fn one_segment(
+    State(st): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Path(seg): Path<String>,
+    req: Request,
+) -> Response {
+    match *req.method() {
+        Method::GET | Method::HEAD => serve(st, seg).await,
+        Method::POST | Method::PUT => upload(st, peer, req, Some(sanitize(&seg))).await,
+        _ => (StatusCode::METHOD_NOT_ALLOWED, "method not allowed\n").into_response(),
+    }
+}
+
+/// `GET /:id/:name` downloads. `PUT /:anything/:name` uploads under that name.
+async fn two_segments(
+    State(st): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Path((id, name)): Path<(String, String)>,
+    req: Request,
+) -> Response {
+    match *req.method() {
+        Method::GET | Method::HEAD => serve(st, id).await,
+        Method::POST | Method::PUT => upload(st, peer, req, Some(sanitize(&name))).await,
         _ => (StatusCode::METHOD_NOT_ALLOWED, "method not allowed\n").into_response(),
     }
 }
@@ -191,10 +220,16 @@ fn sanitize(name: &str) -> String {
     }
 }
 
-async fn upload(st: Arc<AppState>, peer: SocketAddr, req: Request) -> Response {
+async fn upload(
+    st: Arc<AppState>,
+    peer: SocketAddr,
+    req: Request,
+    path_name: Option<String>,
+) -> Response {
     let headers = req.headers().clone();
     let ip = client_ip(&headers, peer);
     let remaining = st.remaining(&ip);
+    tracing::info!(%ip, remaining, name = ?path_name, "upload started");
     if remaining == 0 {
         return (
             StatusCode::TOO_MANY_REQUESTS,
@@ -218,14 +253,17 @@ async fn upload(st: Arc<AppState>, peer: SocketAddr, req: Request) -> Response {
 
     let result = if is_multipart {
         match Multipart::from_request(req, &()).await {
-            Ok(mp) => write_multipart(mp, &path, cap).await,
+            Ok(mp) => write_multipart(mp, &path, cap)
+                .await
+                .map(|(n, size)| (n.or(path_name.clone()), size)),
             Err(e) => Err(UploadError::Message(e.to_string())),
         }
     } else {
         let hinted = headers
             .get("x-filename")
             .and_then(|v| v.to_str().ok())
-            .map(sanitize);
+            .map(sanitize)
+            .or(path_name.clone());
         write_raw(req.into_body(), &path, cap)
             .await
             .map(|size| (hinted, size))
@@ -235,6 +273,7 @@ async fn upload(st: Arc<AppState>, peer: SocketAddr, req: Request) -> Response {
         Ok(v) => v,
         Err(e) => {
             let _ = tokio::fs::remove_file(&path).await;
+            tracing::warn!(%ip, reason = %e, "upload rejected");
             return e.into_response(cap);
         }
     };
@@ -279,6 +318,17 @@ enum UploadError {
     Io,
     Message(String),
     NoFile,
+}
+
+impl std::fmt::Display for UploadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UploadError::TooLarge => write!(f, "too large"),
+            UploadError::Io => write!(f, "io error"),
+            UploadError::Message(m) => write!(f, "{m}"),
+            UploadError::NoFile => write!(f, "no file field"),
+        }
+    }
 }
 
 impl UploadError {
@@ -355,19 +405,9 @@ async fn write_multipart(
     Err(UploadError::NoFile)
 }
 
-async fn download_named(
-    State(st): State<Arc<AppState>>,
-    Path((id, _name)): Path<(String, String)>,
-) -> Response {
-    serve(st, id).await
-}
-
-async fn download(State(st): State<Arc<AppState>>, Path(id): Path<String>) -> Response {
-    serve(st, id).await
-}
-
 async fn serve(st: Arc<AppState>, id: String) -> Response {
     let Some(entry) = st.take(&id) else {
+        tracing::info!(%id, "download miss");
         return (
             StatusCode::NOT_FOUND,
             "not found (already downloaded or expired)\n",

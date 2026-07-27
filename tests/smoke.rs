@@ -90,6 +90,27 @@ fn upload_then_download_once() {
     assert!(h.starts_with("HTTP/1.1 404"), "{h}");
 }
 
+/// `curl -T file.txt https://host/` sends `PUT /file.txt`, not `PUT /`.
+#[test]
+fn curl_upload_file_puts_to_named_path() {
+    let port = 18087;
+    let _srv = start(port, &tmpdir("curl-t"));
+    let payload = b"binary-ish\x00\x01contents";
+    let head = format!(
+        "PUT /provisioning-api HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        payload.len()
+    );
+    let (h, b) = request(port, &head, payload);
+    assert!(h.starts_with("HTTP/1.1 201"), "{h}");
+    let url = String::from_utf8(b).unwrap().trim().to_string();
+    assert!(url.ends_with("/provisioning-api"), "{url}");
+
+    let path = url.trim_start_matches(&format!("http://127.0.0.1:{port}"));
+    let (h, b) = get(port, path);
+    assert!(h.starts_with("HTTP/1.1 200"), "{h}");
+    assert_eq!(b, payload);
+}
+
 #[test]
 fn rejects_oversized_file() {
     let port = 18082;

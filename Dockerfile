@@ -8,9 +8,9 @@ COPY src ./src
 RUN touch src/main.rs && cargo build --release
 
 FROM debian:bookworm-slim
-RUN useradd -m -u 10001 app
 COPY --from=builder /app/target/release/justupload /usr/local/bin/justupload
-USER app
-ENV PORT=8080 UPLOAD_DIR=/tmp/justupload
+# Runs as root: Fly mounts the volume at /data owned by root, and the process
+# creates its upload directory there on boot.
+ENV PORT=8080 UPLOAD_DIR=/data/uploads RUST_LOG=info
 EXPOSE 8080
 CMD ["justupload"]

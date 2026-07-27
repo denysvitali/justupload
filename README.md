@@ -48,14 +48,18 @@ Environment variables:
 | var | default | meaning |
 | --- | --- | --- |
 | `PORT` | `8080` | listen port |
-| `UPLOAD_DIR` | `/tmp/justupload` | where file bodies are buffered |
+| `UPLOAD_DIR` | `/tmp/justupload` | where file bodies are buffered (`/data/uploads` on Fly) |
 | `BASE_URL` | derived from `Host` | base URL used in returned links |
 | `RUST_LOG` | `info` | log filter |
 
 ## Design notes
 
-- File metadata lives in memory; bodies live in `UPLOAD_DIR`. A restart drops
-  everything, which is fine for a service with a one-hour retention.
+- `PUT /` and `PUT /:name` are both uploads: `curl -T file URL/` appends the
+  filename to the path, so the name is taken from the path when present.
+  `GET /:id` and `GET /:id/:name` are downloads.
+- File metadata lives in memory; bodies live in `UPLOAD_DIR` (a 5 GB Fly volume
+  at `/data`). A restart wipes the directory, which is fine for a service with a
+  one-hour retention.
 - Because state is in memory, the app must run as a **single machine**. Do not
   scale it out (`fly.toml` keeps one machine running and disables auto-stop).
 - A download removes the entry from the map before streaming and unlinks the
@@ -71,9 +75,14 @@ Environment variables:
 The repo is deployed by Fly's GitHub integration. To do it by hand:
 
 ```sh
-fly launch --copy-config --no-deploy
+fly volumes create justupload_data --size 5 --region ams   # once
 fly deploy
+fly scale count 1                                          # never more than one
 ```
+
+One `shared-cpu-1x` machine with 256 MB RAM and a 5 GB volume mounted at
+`/data`. State is in memory, so a second machine would hand out URLs the other
+machine cannot serve.
 
 ## CI
 
