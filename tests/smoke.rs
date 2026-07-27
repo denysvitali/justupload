@@ -152,6 +152,20 @@ fn index_is_plain_text_for_curl() {
 }
 
 #[test]
+fn index_is_html_for_browsers() {
+    let port = 18088;
+    let _srv = start(port, &tmpdir("html"));
+    let head = format!(
+        "GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAccept: text/html,*/*\r\nConnection: close\r\n\r\n"
+    );
+    let (h, b) = request(port, &head, b"");
+    assert!(h.contains("text/html"), "{h}");
+    let body = String::from_utf8_lossy(&b);
+    assert!(body.contains("<!DOCTYPE html>"), "{body}");
+    assert!(body.contains("github.com/denysvitali/justupload"), "{body}");
+}
+
+#[test]
 fn unknown_id_is_404() {
     let port = 18085;
     let _srv = start(port, &tmpdir("404"));

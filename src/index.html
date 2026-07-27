@@ -4,27 +4,89 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>justupload</title>
+<meta name="description" content="Temporary file sharing. One download, then it is gone.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#8593;</text></svg>">
 <style>
-  :root { color-scheme: light dark; }
-  body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; max-width: 46rem;
-         margin: 3rem auto; padding: 0 1rem; line-height: 1.5; }
-  h1 { font-size: 1.4rem; margin-bottom: 0; }
-  p.sub { margin-top: .2rem; opacity: .7; }
-  pre { background: rgba(127,127,127,.15); padding: .7rem; overflow-x: auto; border-radius: 6px; }
-  #drop { border: 2px dashed rgba(127,127,127,.5); border-radius: 8px; padding: 2rem;
-          text-align: center; cursor: pointer; }
-  #drop.over { border-color: #3b82f6; }
-  #out a { word-break: break-all; }
-  ul { padding-left: 1.2rem; }
+  :root {
+    color-scheme: light dark;
+    --fg: #16181d;
+    --muted: #6b7280;
+    --bg: #fbfbfa;
+    --card: #ffffff;
+    --line: #e4e4e7;
+    --accent: #2563eb;
+    --danger: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg: #e7e9ee; --muted: #9096a2; --bg: #0f1115; --card: #171a21;
+      --line: #262a33; --accent: #6ea8fe; --danger: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    font: 15px/1.6 ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    color: var(--fg); background: var(--bg);
+    max-width: 42rem; margin: 0 auto; padding: 4rem 1.25rem 5rem;
+  }
+  header { display: flex; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
+  h1 { font-size: 1.25rem; margin: 0; letter-spacing: -.02em; }
+  h2 { font-size: .8rem; text-transform: uppercase; letter-spacing: .1em;
+       color: var(--muted); margin: 2.5rem 0 .75rem; font-weight: 600; }
+  .tagline { color: var(--muted); margin: .4rem 0 2rem; }
+  a { color: var(--accent); }
+  a.repo { margin-left: auto; color: var(--muted); text-decoration: none; font-size: .85rem; }
+  a.repo:hover { color: var(--fg); }
+
+  #drop {
+    border: 1px dashed var(--line); border-radius: 10px; background: var(--card);
+    padding: 2.5rem 1.25rem; text-align: center; cursor: pointer;
+    transition: border-color .15s, background .15s; color: var(--muted);
+  }
+  #drop:hover, #drop.over { border-color: var(--accent); color: var(--fg); }
+  #drop.over { background: color-mix(in srgb, var(--accent) 8%, var(--card)); }
+  #drop strong { display: block; color: var(--fg); font-weight: 600; margin-bottom: .3rem; }
+  #drop small { font-size: .8rem; }
+
+  #bar { height: 2px; background: var(--line); border-radius: 2px; margin-top: 1rem;
+         overflow: hidden; display: none; }
+  #bar.on { display: block; }
+  #bar > i { display: block; height: 100%; width: 0; background: var(--accent);
+             transition: width .15s linear; }
+
+  #out { margin-top: 1rem; min-height: 1.6rem; font-size: .9rem; }
+  #out.err { color: var(--danger); }
+  .result { display: flex; gap: .5rem; align-items: center; background: var(--card);
+            border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem; }
+  .result a { flex: 1; word-break: break-all; text-decoration: none; }
+  .result a:hover { text-decoration: underline; }
+  button { font: inherit; font-size: .8rem; padding: .25rem .6rem; cursor: pointer;
+           color: var(--fg); background: transparent; border: 1px solid var(--line);
+           border-radius: 6px; }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+
+  pre { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+        padding: .8rem 1rem; overflow-x: auto; font-size: .85rem; margin: 0 0 .6rem; }
+  ul { margin: 0; padding-left: 1.1rem; color: var(--muted); }
+  ul strong { color: var(--fg); font-weight: 600; }
+  footer { margin-top: 3.5rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+           color: var(--muted); font-size: .8rem; }
 </style>
 </head>
 <body>
-<h1>justupload</h1>
-<p class="sub">temporary file sharing. one download, then it is gone.</p>
+<header>
+  <h1>justupload</h1>
+  <a class="repo" href="https://github.com/denysvitali/justupload">github ↗</a>
+</header>
+<p class="tagline">Temporary file sharing. One download, then it is gone.</p>
 
-<div id="drop">drop a file here, or click to pick one</div>
+<div id="drop" tabindex="0" role="button" aria-label="Choose a file to upload">
+  <strong>Drop a file here</strong>
+  <small>or click to pick one &middot; max 10 MB</small>
+</div>
 <input type="file" id="picker" hidden>
-<p id="out"></p>
+<div id="bar"><i></i></div>
+<div id="out" aria-live="polite"></div>
 
 <h2>curl</h2>
 <pre>curl -T file.txt {{BASE}}/
@@ -33,43 +95,96 @@ curl -F 'file=@file.txt' {{BASE}}/</pre>
 <h2>wget</h2>
 <pre>wget --method=PUT --body-file=file.txt -qO- {{BASE}}/</pre>
 
-<h2>rules</h2>
+<h2>Rules</h2>
 <ul>
-  <li>max file size: 10 MB</li>
-  <li>deleted after the first download</li>
-  <li>deleted after 1 hour</li>
-  <li>max 30 MB of uploads per hour per IP</li>
+  <li><strong>10 MB</strong> max per file</li>
+  <li>deleted after the <strong>first download</strong></li>
+  <li>deleted after <strong>1 hour</strong></li>
+  <li><strong>30 MB</strong> of uploads per hour per IP</li>
   <li>no backups, no guarantees</li>
 </ul>
 
+<footer>
+  MIT licensed &middot; <a href="https://github.com/denysvitali/justupload">denysvitali/justupload</a>
+</footer>
+
 <script>
+const MAX = 10 * 1024 * 1024;
 const drop = document.getElementById('drop');
 const picker = document.getElementById('picker');
 const out = document.getElementById('out');
+const bar = document.getElementById('bar');
+const fill = bar.firstElementChild;
+
+function message(text, isError) {
+  out.className = isError ? 'err' : '';
+  out.textContent = text;
+}
+
+function showResult(url) {
+  out.className = '';
+  out.innerHTML = '';
+  const box = document.createElement('div');
+  box.className = 'result';
+  const a = document.createElement('a');
+  a.href = url;
+  a.textContent = url;
+  const copy = document.createElement('button');
+  copy.textContent = 'copy';
+  copy.onclick = () => {
+    navigator.clipboard.writeText(url).then(() => {
+      copy.textContent = 'copied';
+      setTimeout(() => (copy.textContent = 'copy'), 1500);
+    });
+  };
+  box.append(a, copy);
+  out.appendChild(box);
+}
 
 function send(file) {
   if (!file) return;
-  if (file.size > 10 * 1024 * 1024) { out.textContent = 'too large: max 10 MB'; return; }
-  out.textContent = 'uploading ' + file.name + '...';
-  fetch('/', { method: 'PUT', body: file, headers: { 'X-Filename': file.name } })
-    .then(r => r.text().then(t => ({ ok: r.ok, t: t.trim() })))
-    .then(({ ok, t }) => {
-      if (!ok) { out.textContent = t; return; }
-      out.innerHTML = '';
-      const a = document.createElement('a');
-      a.href = t; a.textContent = t;
-      out.appendChild(a);
-    })
-    .catch(e => { out.textContent = 'upload failed: ' + e; });
+  if (file.size > MAX) {
+    message('too large: ' + file.name + ' is over the 10 MB limit', true);
+    return;
+  }
+  message('uploading ' + file.name + '...');
+  bar.classList.add('on');
+  fill.style.width = '0';
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('PUT', '/' + encodeURIComponent(file.name));
+  xhr.setRequestHeader('X-Filename', file.name);
+  xhr.upload.onprogress = e => {
+    if (e.lengthComputable) fill.style.width = (e.loaded / e.total * 100) + '%';
+  };
+  xhr.onload = () => {
+    bar.classList.remove('on');
+    const body = xhr.responseText.trim();
+    if (xhr.status === 201) showResult(body);
+    else message(body || ('upload failed (' + xhr.status + ')'), true);
+  };
+  xhr.onerror = () => {
+    bar.classList.remove('on');
+    message('upload failed: network error', true);
+  };
+  xhr.send(file);
 }
 
 drop.addEventListener('click', () => picker.click());
+drop.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); picker.click(); }
+});
 picker.addEventListener('change', () => send(picker.files[0]));
 drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
 drop.addEventListener('dragleave', () => drop.classList.remove('over'));
 drop.addEventListener('drop', e => {
-  e.preventDefault(); drop.classList.remove('over');
+  e.preventDefault();
+  drop.classList.remove('over');
   send(e.dataTransfer.files[0]);
+});
+document.addEventListener('paste', e => {
+  const file = [...(e.clipboardData?.files || [])][0];
+  if (file) send(file);
 });
 </script>
 </body>

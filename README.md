@@ -105,3 +105,7 @@ Pushes to `main` are deployed by Fly's GitHub integration.
 
 `.github/workflows/ci.yml` runs `cargo fmt --check`, `cargo clippy -D warnings`,
 `cargo test`, and a Docker image build on every push and pull request.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

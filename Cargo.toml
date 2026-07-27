@@ -2,6 +2,9 @@
 name = "justupload"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Temporary file sharing: one download, then the file is gone"
+repository = "https://github.com/denysvitali/justupload"
 
 [dependencies]
 axum = { version = "0.7", features = ["multipart"] }
