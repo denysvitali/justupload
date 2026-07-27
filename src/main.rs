@@ -178,7 +178,17 @@ fn index(st: &AppState, headers: &HeaderMap) -> Response {
          \x20 - deleted after the first download\n\
          \x20 - deleted after 1 hour\n\
          \x20 - max 30 MB of uploads per hour per IP\n\
-         \x20 - no backups, no guarantees\n"
+         \x20 - no backups, no guarantees\n\
+         \x20 - no illegal content, please\n\
+         \n\
+         please be kind:\n\
+         \x20 this is a small free service run for convenience. do not upload\n\
+         \x20 anything illegal, and do not upload anything that would force us\n\
+         \x20 to shut it down. we do not host, review or endorse what you\n\
+         \x20 upload: you are responsible for your own files and we take no\n\
+         \x20 responsibility for them. abuse gets the file removed, and if it\n\
+         \x20 keeps happening the service goes away for everyone. please do\n\
+         \x20 not be the reason.\n"
     );
     ([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], txt).into_response()
 }

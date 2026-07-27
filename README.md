@@ -22,6 +22,12 @@ $ curl -OJ https://justupload.fly.dev/aB3xQ7ph/notes.txt   # works exactly once
 | retention | until first download, max 1 hour |
 | upload quota | 30 MB per hour per IP |
 
+Please do not upload illegal content, and please do not upload anything that
+would force the service to be shut down. Files are not hosted, reviewed or
+endorsed by the operator: you are responsible for what you upload, and the
+operator takes no responsibility for it. Abuse gets the file removed, and
+repeated abuse gets the service switched off for everyone.
+
 ## Usage
 
 ```sh
